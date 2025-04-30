@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  database:
+    image: postgres
+    container_name: database
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=populate_db
+    volumes:
+      - pgdata:/data/postgres
+
+volumes:
+  pgdata:
+    driver: local
+
+
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: DOCKERFILE
+  #   container_name: go_populate_db
+  #   depends_on:
+  #     - db
+  #   environment:
+  #     - DB_HOST=db
+  #     - DB_PORT=5432
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=12345
+  #     - DB_NAME=populate_db
+  #   volumes:
+  #     - ./movies.csv:/root/movies.csv:ro
+  #   tty: true
