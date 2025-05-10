@@ -1,12 +1,10 @@
 package infra
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-	"strings"
+	"context"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type IRepository interface {
@@ -14,42 +12,25 @@ type IRepository interface {
 }
 
 type repository struct {
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
-func NewRepo(db *sql.DB) *repository {
+func NewRepo(db *pgxpool.Pool) *repository {
 	return &repository{db: db}
 }
 
 func (r *repository) SaveMultiplesMovies(movies []*Movie) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
+	rows := make([][]interface{}, len(movies))
+	for i, movie := range movies {
+		rows[i] = []interface{}{movie.Id, movie.Title, movie.Year, movie.Genres}
 	}
-	defer tx.Rollback()
 
-	var (
-		valueStrings []string
-		valueArgs    []any
+	_, err := r.db.CopyFrom(
+		context.Background(),
+		pgx.Identifier{"movies"},
+		[]string{"id", "title", "year", "genres"},
+		pgx.CopyFromRows(rows),
 	)
 
-	for i, movie := range movies {
-		// Cada grupo de valores precisa de placeholders únicos: ($1, $2, $3, $4), ...
-		n := i * 4
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d)", n+1, n+2, n+3, n+4))
-		valueArgs = append(valueArgs, movie.Id, movie.Title, movie.Year, pq.Array(movie.Genres))
-	}
-
-	stmt := fmt.Sprintf("INSERT INTO movies (id, title, year, genres) VALUES %s", strings.Join(valueStrings, ","))
-
-	if _, err := tx.Exec(stmt, valueArgs...); err != nil {
-		log.Printf("erro no bulk insert: %s", err)
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }

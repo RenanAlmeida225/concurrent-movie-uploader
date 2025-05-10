@@ -1,10 +1,10 @@
 package infra
 
 import (
-	"database/sql"
+	"context"
 	"log"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const table = `
@@ -22,20 +22,23 @@ type Movie struct {
 	Genres []string `db:"genres"`
 }
 
-func New() *sql.DB {
-	connStr := "postgres://postgres:postgres@localhost:5432/populate_db?sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+func New() *pgxpool.Pool {
+	connStr := "postgres://postgres:postgres@localhost:5432/populate_db"
+	config, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		log.Fatalf("Erro ao abrir conexão com o banco: %s", err)
+		log.Fatalf("Erro ao parsear config: %v", err)
 	}
 
-	if err = db.Ping(); err != nil {
-		log.Fatalf("Erro ao testar conexão com o banco: %s", err)
+	dbpool, err := pgxpool.New(context.Background(), config.ConnString())
+	if err != nil {
+		log.Fatalf("Erro ao criar pool: %v", err)
 	}
 
-	if _, err = db.Exec(table); err != nil {
+	// Criação da tabela
+	_, err = dbpool.Exec(context.Background(), table)
+	if err != nil {
 		log.Fatalf("Erro ao criar tabela: %v", err)
 	}
 
-	return db
+	return dbpool
 }
