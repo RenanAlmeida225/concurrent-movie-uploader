@@ -14,7 +14,7 @@ func main() {
 	r := infra.NewRepo(db)
 	s := service.New(r)
 
-	movies := make(chan []infra.Movie, 2)
+	movies := make(chan []*infra.Movie, 2)
 
 	go s.ReadCSV("movies.csv", movies)
 

@@ -13,13 +13,11 @@ import (
 	"github.com/RenanAlmeida225/concurrent-movie-uploader/infra"
 )
 
-const MAX_INSERT = 2500
+const MAX_INSERT = 500
 
 type IService interface {
-	ReadCSV(filename string, cMovies chan<- []infra.Movie)
-	separateTitleYear(titleYear string) [2]string
-	separateGenres(genres string) []string
-	SaveMovies(cMovies <-chan []infra.IRepository)
+	ReadCSV(filename string, cMovies chan<- []*infra.Movie)
+	SaveMovies(cMovies <-chan []*infra.Movie)
 }
 
 type service struct {
@@ -30,8 +28,8 @@ func New(repo infra.IRepository) *service {
 	return &service{repo: repo}
 }
 
-func (s *service) ReadCSV(filename string, cMovies chan<- []infra.Movie) {
-	var movies []infra.Movie
+func (s *service) ReadCSV(filename string, cMovies chan<- []*infra.Movie) {
+	var movies []*infra.Movie
 
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0644)
 	if err != nil {
@@ -69,7 +67,7 @@ func (s *service) ReadCSV(filename string, cMovies chan<- []infra.Movie) {
 
 		genres := s.separateGenres(record[2])
 
-		movies = append(movies, infra.Movie{Id: id, Title: titleYear[0], Year: year, Genres: genres})
+		movies = append(movies, &infra.Movie{Id: id, Title: titleYear[0], Year: year, Genres: genres})
 
 		if len(movies) == MAX_INSERT {
 			cMovies <- movies
@@ -84,7 +82,17 @@ func (s *service) ReadCSV(filename string, cMovies chan<- []infra.Movie) {
 	close(cMovies)
 }
 
-// ^(.*)\((\d{4})\)$
+func (s *service) SaveMovies(cMovies <-chan []*infra.Movie) {
+	count := 0
+	for movies := range cMovies {
+		if err := s.repo.SaveMultiplesMovies(movies); err != nil {
+			log.Fatalf("erro ao salvar filmes: %s", err)
+		}
+		count += len(movies)
+		fmt.Printf("Salvo total de %d filmes até agora\n", count)
+	}
+}
+
 func (s *service) separateTitleYear(titleYear string) [2]string {
 	re := regexp.MustCompile(`\((\d{4})\)`)
 	matches := re.FindAllStringSubmatch(titleYear, -1)
@@ -105,15 +113,4 @@ func (s *service) separateTitleYear(titleYear string) [2]string {
 
 func (s *service) separateGenres(genres string) []string {
 	return strings.Split(genres, "|")
-}
-
-func (s *service) SaveMovies(cMovies <-chan []infra.Movie) {
-	count := 0
-	for movies := range cMovies {
-		if err := s.repo.SaveMultiplesMovies(movies); err != nil {
-			log.Fatalf("erro ao salvar filmes: %s", err)
-		}
-		count += len(movies)
-		fmt.Printf("Salvo total de %d filmes até agora\n", count)
-	}
 }

@@ -8,7 +8,7 @@ import (
 )
 
 type IRepository interface {
-	SaveMultiplesMovies(movies []Movie) error
+	SaveMultiplesMovies(movies []*Movie) error
 }
 
 type repository struct {
@@ -19,7 +19,7 @@ func NewRepo(db *sql.DB) *repository {
 	return &repository{db: db}
 }
 
-func (r *repository) SaveMultiplesMovies(movies []Movie) error {
+func (r *repository) SaveMultiplesMovies(movies []*Movie) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
