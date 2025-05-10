@@ -9,11 +9,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/RenanAlmeida225/concurrent-movie-uploader/infra"
 )
 
-const MAX_INSERT = 500
+const MAX_INSERT = 5000
+
+var yearRegex = regexp.MustCompile(`\((\d{4})\)`)
 
 type IService interface {
 	ReadCSV(filename string, cMovies chan<- []*infra.Movie)
@@ -29,6 +33,7 @@ func New(repo infra.IRepository) *service {
 }
 
 func (s *service) ReadCSV(filename string, cMovies chan<- []*infra.Movie) {
+	start := time.Now()
 	var movies []*infra.Movie
 
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0644)
@@ -80,22 +85,35 @@ func (s *service) ReadCSV(filename string, cMovies chan<- []*infra.Movie) {
 	}
 
 	close(cMovies)
+	fmt.Printf("Tempo de leitura e envio dos filmes: %s\n", time.Since(start))
 }
 
 func (s *service) SaveMovies(cMovies <-chan []*infra.Movie) {
-	count := 0
-	for movies := range cMovies {
-		if err := s.repo.SaveMultiplesMovies(movies); err != nil {
-			log.Fatalf("erro ao salvar filmes: %s", err)
+	var wg sync.WaitGroup
+	const workers = 5
+
+	worker := func(id int, jobs <-chan []*infra.Movie) {
+		defer wg.Done()
+		for movies := range jobs {
+			start := time.Now()
+			if err := s.repo.SaveMultiplesMovies(movies); err != nil {
+				log.Printf("worker %d: erro ao salvar filmes: %s", id, err)
+			}
+			fmt.Printf("Worker %d salvou %d filmes em %s\n", id, len(movies), time.Since(start))
 		}
-		count += len(movies)
-		fmt.Printf("Salvo total de %d filmes até agora\n", count)
 	}
+
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go worker(i+1, cMovies)
+	}
+
+	wg.Wait()
+
 }
 
 func (s *service) separateTitleYear(titleYear string) [2]string {
-	re := regexp.MustCompile(`\((\d{4})\)`)
-	matches := re.FindAllStringSubmatch(titleYear, -1)
+	matches := yearRegex.FindAllStringSubmatch(titleYear, -1)
 
 	if len(matches) == 0 {
 		return [2]string{strings.TrimSpace(titleYear), "0000"}
